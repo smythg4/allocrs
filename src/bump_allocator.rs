@@ -6,10 +6,6 @@ use std::os::raw::c_void;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
-/// Set the global allocator.
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: Locked<BumpAllocator> = Locked::new(BumpAllocator::new());
-
 /// Pre-defined heap size
 const HEAP_SIZE: usize = 4096 * 10; // 40 KB heap
 
