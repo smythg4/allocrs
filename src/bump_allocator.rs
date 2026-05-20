@@ -73,6 +73,11 @@ pub struct BumpAllocator {
     allocations: usize,
 }
 
+impl Default for BumpAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl BumpAllocator {
     /// Creates a new empty bump allocator.
     pub const fn new() -> Self {
@@ -85,9 +90,10 @@ impl BumpAllocator {
     }
 
     /// Initializes the bump allocator with the given heap bounds.
+    /// # Safety
     ///
-    /// This method is unsafe because the caller must ensure that the given
-    /// memory range is unused. Also, this method must be called only once.
+    /// The caller must ensure this is called only once.
+    /// The mmap'd region must be unused.
     pub unsafe fn init(&mut self) {
         let ptr = unsafe {
             libc::mmap(
@@ -109,10 +115,6 @@ impl BumpAllocator {
         self.heap_end = self.heap_start + HEAP_SIZE;
         self.next = self.heap_start;
     }
-
-    pub fn bytes_allocated(&self) -> usize {
-        self.next - self.heap_start
-    }
 }
 
 unsafe impl GlobalAlloc for Locked<BumpAllocator> {
@@ -129,15 +131,13 @@ unsafe impl GlobalAlloc for Locked<BumpAllocator> {
             None => return std::ptr::null_mut(),
         };
 
-        let result = if alloc_end > bump.heap_end {
+        if alloc_end > bump.heap_end {
             std::ptr::null_mut() // Out of memory
         } else {
             bump.next = alloc_end;
             bump.allocations += 1;
             alloc_start as *mut u8
-        };
-
-        result
+        }
     }
 
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
