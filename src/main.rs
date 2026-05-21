@@ -1,8 +1,9 @@
-use allocrs::bump_allocator::{BumpAllocator, Locked};
+use allocrs::linked_list_allocator::LinkedListAllocator;
+use allocrs::locked::Locked;
 
 /// Set the global allocator.
 #[global_allocator]
-pub static GLOBAL_ALLOCATOR: Locked<BumpAllocator> = Locked::new(BumpAllocator::new());
+pub static GLOBAL_ALLOCATOR: Locked<LinkedListAllocator> = Locked::new(LinkedListAllocator::new());
 
 fn main() {
     let v: Vec<usize> = (0..100).collect(); // Allocates from the bump allocator
