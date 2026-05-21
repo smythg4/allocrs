@@ -1,8 +1,8 @@
+use crate::HEAP_SIZE;
+use crate::locked::Locked;
 use libc::{MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, PROT_READ, PROT_WRITE};
 use std::alloc::{GlobalAlloc, Layout};
 use std::os::raw::c_void;
-use crate::locked::Locked;
-use crate::HEAP_SIZE;
 
 impl Locked<BumpAllocator> {
     pub fn bytes_allocated(&self) -> usize {

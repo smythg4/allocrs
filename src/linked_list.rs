@@ -1,9 +1,9 @@
+use crate::HEAP_SIZE;
+use crate::locked::Locked;
 use libc::{MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, PROT_READ, PROT_WRITE};
 use std::alloc::{GlobalAlloc, Layout};
 use std::os::raw::c_void;
 use std::ptr;
-use crate::locked::Locked;
-use crate::HEAP_SIZE;
 
 struct ListNode {
     size: usize,
@@ -162,7 +162,7 @@ impl LinkedListAllocator {
         (size, layout.align())
     }
 
-  pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
+    pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
         let (size, align) = LinkedListAllocator::size_align(layout);
         if !self.initialized {
             unsafe { self.init() };
@@ -180,16 +180,16 @@ impl LinkedListAllocator {
         } else {
             ptr::null_mut()
         }
-  }
+    }
 
-  pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
+    pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
         // perform layout adjustments
         let (size, _) = LinkedListAllocator::size_align(layout);
 
         unsafe { self.add_free_region(ptr as usize, size) }
-  }
+    }
 
-  pub fn free_bytes(&self) -> usize {
+    pub fn free_bytes(&self) -> usize {
         let mut total_free = 0;
         let mut current = &self.head;
         while let Some(node) = &current.next {
@@ -197,7 +197,7 @@ impl LinkedListAllocator {
             current = node;
         }
         total_free
-  }
+    }
 }
 
 impl Locked<LinkedListAllocator> {
