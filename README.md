@@ -40,12 +40,12 @@ fixed sizes introduces internal fragmentation, but eliminates free list searchin
 without using `std::sync::Mutex`. It holds the allocator in an `UnsafeCell<A>` for interior
 mutability and an `AtomicBool` as the lock. Acquiring the lock returns a `LockGuard<A>` that
 releases it on drop.
-
+```
 Locked<BumpAllocator>
 Locked<LinkedListAllocator>
 Locked<FixedSizeBlockAllocator>
   └── fallback: LinkedListAllocator (unguarded, protected by outer lock)
-
+```
 Each allocator is backed by an anonymous `mmap` region acquired lazily on first allocation.
 
 ## Deviations from Opp
