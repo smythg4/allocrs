@@ -3,9 +3,7 @@ use std::alloc::{GlobalAlloc, Layout};
 use std::os::raw::c_void;
 use std::ptr;
 use crate::locked::Locked;
-
-/// Pre-defined heap size
-const HEAP_SIZE: usize = 1024 * 1024; // 1 MB heap
+use crate::HEAP_SIZE;
 
 struct ListNode {
     size: usize,
@@ -163,49 +161,61 @@ impl LinkedListAllocator {
         let size = layout.size().max(std::mem::size_of::<ListNode>());
         (size, layout.align())
     }
-}
 
-impl Locked<LinkedListAllocator> {
-    pub fn bytes_allocated(&self) -> usize {
-        let mut total_free = 0;
-        let mut guard = self.lock();
-        let mut current = &mut guard.head;
-        while let Some(node) = &mut current.next {
-            total_free += node.size;
-            current = node;
-        }
-        HEAP_SIZE - total_free
-    }
-}
-
-unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        // perform layout adjustments
+  pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
         let (size, align) = LinkedListAllocator::size_align(layout);
-        let mut allocator = self.lock();
-        if !allocator.initialized {
-            unsafe { allocator.init() };
+        if !self.initialized {
+            unsafe { self.init() };
         }
 
-        if let Some((region, alloc_start)) = allocator.find_region(size, align) {
+        if let Some((region, alloc_start)) = self.find_region(size, align) {
             let alloc_end = alloc_start.checked_add(size).expect("overflow");
             let excess_size = region.end_addr() - alloc_end;
             if excess_size > 0 {
                 unsafe {
-                    allocator.add_free_region(alloc_end, excess_size);
+                    self.add_free_region(alloc_end, excess_size);
                 }
             }
             alloc_start as *mut u8
         } else {
             ptr::null_mut()
         }
-    }
+  }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+  pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
         // perform layout adjustments
         let (size, _) = LinkedListAllocator::size_align(layout);
 
-        unsafe { self.lock().add_free_region(ptr as usize, size) }
+        unsafe { self.add_free_region(ptr as usize, size) }
+  }
+
+  pub fn free_bytes(&self) -> usize {
+        let mut total_free = 0;
+        let mut current = &self.head;
+        while let Some(node) = &current.next {
+            total_free += node.size;
+            current = node;
+        }
+        total_free
+  }
+}
+
+impl Locked<LinkedListAllocator> {
+    pub fn bytes_allocated(&self) -> usize {
+        let total_free = self.lock().free_bytes();
+        HEAP_SIZE - total_free
+    }
+}
+
+unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let mut allocator = self.lock();
+        allocator.alloc(layout)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        let mut allocator = self.lock();
+        allocator.dealloc(ptr, layout);
     }
 }
 

@@ -1,4 +1,4 @@
-use allocrs::bump_allocator::BumpAllocator;
+use allocrs::bump::BumpAllocator;
 use allocrs::locked::Locked;
 
 /// Set the global allocator.

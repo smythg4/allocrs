@@ -2,11 +2,7 @@ use libc::{MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, PROT_READ, PROT_WRITE};
 use std::alloc::{GlobalAlloc, Layout};
 use std::os::raw::c_void;
 use crate::locked::Locked;
-
-/// Pre-defined heap size
-const HEAP_SIZE: usize = 1024 * 1024; // 1 MB heap
-
-
+use crate::HEAP_SIZE;
 
 impl Locked<BumpAllocator> {
     pub fn bytes_allocated(&self) -> usize {

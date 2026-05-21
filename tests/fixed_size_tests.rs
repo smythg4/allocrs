@@ -1,9 +1,9 @@
-use allocrs::linked_list::LinkedListAllocator;
+use allocrs::fixed_size_block::FixedSizeBlockAllocator;
 use allocrs::locked::Locked;
 
 /// Set the global allocator.
 #[global_allocator]
-pub static GLOBAL_ALLOCATOR: Locked<LinkedListAllocator> = Locked::new(LinkedListAllocator::new());
+pub static GLOBAL_ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
 
 /// Pre-defined heap size
 const HEAP_SIZE: usize = 1024 * 1024; // 1 MB heap

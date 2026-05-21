@@ -28,6 +28,15 @@
   deallocation, reducing fragmentation. This goes beyond Opp's implementation which omits
   coalescing.
 
+  ### Fixed Size Block Allocator
+  Maintains separate free lists for fixed block sizes (8, 16, 32, 64, 128, 256, 512, 1024, 2048
+  bytes). On allocation, the request is rounded up to the nearest block size and a block is
+  popped off the corresponding free list in O(1). On deallocation, the block is pushed back onto its
+  list for immediate reuse. Allocations larger than 2048 bytes fall back to the linked list
+  allocator.
+  
+  The tradeoff versus the linked list allocator is speed for memory efficiency — rounding up to
+fixed sizes introduces internal fragmentation, but eliminates free list searching entirely.
+
   ## Next Steps
-  - Fixed-size block allocator
   - Heap growth via `mmap` overprovisioning
