@@ -72,6 +72,6 @@ keeps the free list sorted by address and merges adjacent blocks on every deallo
 fragmentation.
 
 ## Next Steps
-- Slap Allocator
+- Slab Allocator
 - Buddy Allocator
 - Heap growth via `mmap` overprovisioning
