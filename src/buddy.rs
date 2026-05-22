@@ -4,26 +4,28 @@ use libc::{MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, PROT_READ, PROT_WRITE};
 use std::alloc::{GlobalAlloc, Layout};
 use std::os::raw::c_void;
 
-pub const ORDERS: usize = 14; // log_2(HEAP_SIZE=1MB / MIN_BLOCK_SIZE=64B)
-pub const MIN_BLOCK_SIZE: usize = 64;
+// pub const ORDERS: usize = 14; // log_2(HEAP_SIZE=1MB / MIN_BLOCK_SIZE=64B)
+// pub const MIN_BLOCK_SIZE: usize = 64;
 
 struct ListNode {
     next: Option<&'static mut ListNode>,
 }
 
-pub struct BuddyAllocator {
+pub struct BuddyAllocator<const MIN_BLOCK_SIZE: usize, const ORDERS: usize> {
     free_lists: [Option<&'static mut ListNode>; ORDERS],
     heap_start: usize,
     initialized: bool,
 }
 
-impl Default for BuddyAllocator {
+impl<const MIN_BLOCK_SIZE: usize, const ORDERS: usize> Default
+    for BuddyAllocator<MIN_BLOCK_SIZE, ORDERS>
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl BuddyAllocator {
+impl<const MIN_BLOCK_SIZE: usize, const ORDERS: usize> BuddyAllocator<MIN_BLOCK_SIZE, ORDERS> {
     pub const fn new() -> Self {
         const EMPTY: Option<&'static mut ListNode> = None;
         BuddyAllocator {
@@ -39,6 +41,11 @@ impl BuddyAllocator {
     /// The caller must ensure this is called only once.
     /// The mmap'd region must be unused.
     pub unsafe fn init(&mut self) {
+        assert_eq!(
+            MIN_BLOCK_SIZE << ORDERS,
+            HEAP_SIZE,
+            "ORDERS must equal log2(HEAP_SIZE / MIN_BLOCK_SIZE)"
+        );
         let ptr = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -96,7 +103,7 @@ impl BuddyAllocator {
         if !self.initialized {
             unsafe { self.init() };
         }
-        match list_index(&layout) {
+        match self.orders_index(&layout) {
             Some(order) => match self.free_lists[order].take() {
                 Some(node) => {
                     self.free_lists[order] = node.next.take();
@@ -113,7 +120,7 @@ impl BuddyAllocator {
 
     pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
         let this_addr = ptr as usize;
-        let order = list_index(&layout).unwrap();
+        let order = self.orders_index(&layout).unwrap();
         if order == ORDERS - 1 {
             self.add_free_block(this_addr, order);
             return;
@@ -146,6 +153,20 @@ impl BuddyAllocator {
             }
         }
     }
+
+    /// Choose an appropriate order for the given layout.
+    ///
+    /// Returns an index into the `free_list` array.
+    fn orders_index(&self, layout: &Layout) -> Option<usize> {
+        let required_block_size = layout.size().max(layout.align()).max(MIN_BLOCK_SIZE);
+        if required_block_size > MIN_BLOCK_SIZE << (ORDERS - 1) {
+            return None;
+        }
+        Some(
+            required_block_size.next_power_of_two().trailing_zeros() as usize
+                - MIN_BLOCK_SIZE.trailing_zeros() as usize,
+        )
+    }
 }
 
 /// Align the given address `addr` upwards to alignment `align`.
@@ -153,21 +174,9 @@ fn align_up(addr: usize, align: usize) -> usize {
     (addr + align - 1) & !(align - 1)
 }
 
-/// Choose an appropriate order for the given layout.
-///
-/// Returns an index into the `free_list` array.
-fn list_index(layout: &Layout) -> Option<usize> {
-    let required_block_size = layout.size().max(layout.align()).max(MIN_BLOCK_SIZE);
-    if required_block_size > MIN_BLOCK_SIZE << (ORDERS - 1) {
-        return None;
-    }
-    Some(
-        required_block_size.next_power_of_two().trailing_zeros() as usize
-            - MIN_BLOCK_SIZE.trailing_zeros() as usize,
-    )
-}
-
-unsafe impl GlobalAlloc for Locked<BuddyAllocator> {
+unsafe impl<const MIN_BLOCK_SIZE: usize, const ORDERS: usize> GlobalAlloc
+    for Locked<BuddyAllocator<MIN_BLOCK_SIZE, ORDERS>>
+{
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut allocator = self.lock();
         allocator.alloc(layout)
@@ -179,7 +188,9 @@ unsafe impl GlobalAlloc for Locked<BuddyAllocator> {
     }
 }
 
-impl Locked<BuddyAllocator> {
+impl<const MIN_BLOCK_SIZE: usize, const ORDERS: usize>
+    Locked<BuddyAllocator<MIN_BLOCK_SIZE, ORDERS>>
+{
     pub fn bytes_allocated(&self) -> usize {
         let allocator = self.lock();
         let mut free_bytes = 0;

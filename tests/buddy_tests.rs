@@ -1,9 +1,10 @@
 use allocrs::buddy::BuddyAllocator;
 use allocrs::locked::Locked;
+use allocrs::HEAP_SIZE;
 
 /// Set the global allocator.
 #[global_allocator]
-pub static GLOBAL_ALLOCATOR: Locked<BuddyAllocator> = Locked::new(BuddyAllocator::new());
+pub static GLOBAL_ALLOCATOR: Locked<BuddyAllocator<64, 14>> = Locked::new(BuddyAllocator::new());
 
 #[test]
 fn simple_allocation() {
@@ -23,7 +24,7 @@ fn large_vec() {
 
 #[test]
 fn many_boxes() {
-    for i in 0..1000 {
+    for i in 0..HEAP_SIZE {
         let x = Box::new(i);
         assert_eq!(*x, i);
     }
@@ -32,7 +33,7 @@ fn many_boxes() {
 #[test]
 fn many_boxes_long_lived() {
     let long_lived = Box::new(1);
-    for i in 0..1000 {
+    for i in 0..HEAP_SIZE {
         let x = Box::new(i);
         assert_eq!(*x, i);
     }

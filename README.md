@@ -47,10 +47,18 @@ The buddy address is computed with an XOR relative to the heap base:
 buddy = heap_start + ((addr - heap_start) ^ block_size)
 ```
 
-`MIN_BLOCK_SIZE` controls the granularity of the allocator and must be chosen relative to
-`HEAP_SIZE`: `ORDERS = log2(HEAP_SIZE / MIN_BLOCK_SIZE)`. A page-sized minimum (4 KB) is
-appropriate when the buddy allocator serves as a page allocator underneath a slab layer;
-a cache-line-sized minimum (64 bytes) is appropriate when used directly as a global allocator.
+`MIN_BLOCK_SIZE` and `ORDERS` are const generic parameters on the struct, so the
+configuration is fixed at compile time with no runtime overhead:
+
+```rust
+Locked<BuddyAllocator<64, 14>>   // 64-byte min block, 14 orders → 1 MB heap
+Locked<BuddyAllocator<4096, 8>>  // 4 KB min block,   8 orders  → 1 MB heap
+```
+
+The caller must satisfy `MIN_BLOCK_SIZE << ORDERS == HEAP_SIZE`; this is validated
+with a runtime assert in `init()`. A page-sized minimum (4 KB) is appropriate when the
+buddy allocator serves as a page allocator underneath a slab layer; a cache-line-sized
+minimum (64 bytes) is appropriate when used directly as a global allocator.
 
 ## Architecture
 
@@ -63,7 +71,7 @@ Locked<BumpAllocator>
 Locked<LinkedListAllocator>
 Locked<FixedSizeBlockAllocator>
   └── fallback: LinkedListAllocator (unguarded, protected by outer lock)
-Locked<BuddyAllocator>
+Locked<BuddyAllocator<MIN_BLOCK_SIZE, ORDERS>>
 ```
 Each allocator is backed by an anonymous `mmap` region acquired lazily on first allocation.
 
@@ -83,7 +91,13 @@ and calling `mmap` if needed.
 **Generic `Locked<A>` wrapper**
 Opp implements a bespoke `Locked<A>` using the `spin` crate. This project implements the
 spinlock directly using `AtomicBool` and `UnsafeCell`, with a RAII `LockGuard<A>` that
-releases the lock on drop. The wrapper is fully generic and reused across all three allocators.
+releases the lock on drop. The wrapper is fully generic and reused across all allocators.
+
+**Const generic `BuddyAllocator<MIN_BLOCK_SIZE, ORDERS>`**
+Rather than fixing the block size and order count as module-level constants, the buddy
+allocator is parameterised at the type level. This allows different configurations to
+coexist as distinct types with no runtime overhead, and makes misconfiguration visible
+at the call site.
 
 **Linked list allocator with coalescing**
 Opp's linked list allocator does not coalesce adjacent free regions. This implementation

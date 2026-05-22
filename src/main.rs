@@ -1,14 +1,14 @@
 use std::time::Instant;
 
 use allocrs::buddy::BuddyAllocator;
-use allocrs::fixed_size_block::FixedSizeBlockAllocator;
-use allocrs::linked_list::LinkedListAllocator;
+// use allocrs::fixed_size_block::FixedSizeBlockAllocator;
+// use allocrs::linked_list::LinkedListAllocator;
 use allocrs::locked::Locked;
 
 #[global_allocator]
 //pub static GLOBAL_ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
 //pub static GLOBAL_ALLOCATOR: Locked<LinkedListAllocator> = Locked::new(LinkedListAllocator::new());
-pub static GLOBAL_ALLOCATOR: Locked<BuddyAllocator> = Locked::new(BuddyAllocator::new());
+pub static GLOBAL_ALLOCATOR: Locked<BuddyAllocator<64, 14>> = Locked::new(BuddyAllocator::new());
 
 const ITERATIONS: usize = 100_000;
 
