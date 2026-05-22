@@ -60,6 +60,29 @@ with a runtime assert in `init()`. A page-sized minimum (4 KB) is appropriate wh
 buddy allocator serves as a page allocator underneath a slab layer; a cache-line-sized
 minimum (64 bytes) is appropriate when used directly as a global allocator.
 
+### Slab Allocator
+Manages memory as a collection of fixed-size object caches. Each cache maintains three
+linked lists of slabs — **partial** (some slots used), **full** (all slots used), and
+**empty** (no slots used) — enabling O(1) allocation and efficient identification of pages
+that can be returned to the OS.
+
+`Slab::next` is an intrusive linked list pointer owned and managed entirely by `SlabCache`.
+Slabs carry their own list linkage rather than requiring a separate container, following
+the same pattern used for free lists throughout this project.
+
+A `Slab` is backed by a single mmap'd page divided into fixed-size slots. Free slots form
+an embedded linked list (the same in-place `ListNode` trick used throughout this project).
+The minimum slot size is `max(size_of::<T>(), size_of::<ListNode>())` so that free slots
+can always hold a list pointer regardless of `T`.
+
+`SlabCache<T>` owns slabs as `Box<Slab<T>>` and routes each slab between the three lists
+as its occupancy changes. Deallocation walks the lists to find the owning slab via a
+`contains()` check, frees the slot, then re-routes the slab based on its new state.
+
+Unlike the other allocators, `SlabCache` is not a `#[global_allocator]` — it is a
+purpose-built object cache intended to sit above a page allocator such as the buddy
+allocator.
+
 ## Architecture
 
 `Locked<A>` is a generic spinlock wrapper that provides thread safety for any allocator `A`
@@ -105,29 +128,6 @@ at the call site.
 Oppermann's linked list allocator does not coalesce adjacent free regions. This implementation
 keeps the free list sorted by address and merges adjacent blocks on every deallocation, reducing
 fragmentation.
-
-### Slab Allocator
-Manages memory as a collection of fixed-size object caches. Each cache maintains three
-linked lists of slabs — **partial** (some slots used), **full** (all slots used), and
-**empty** (no slots used) — enabling O(1) allocation and efficient identification of pages
-that can be returned to the OS.
-
-`Slab::next` is an intrusive linked list pointer owned and managed entirely by `SlabCache`.
-Slabs carry their own list linkage rather than requiring a separate container, following
-the same pattern used for free lists throughout this project.
-
-A `Slab` is backed by a single mmap'd page divided into fixed-size slots. Free slots form
-an embedded linked list (the same in-place `ListNode` trick used throughout this project).
-The minimum slot size is `max(size_of::<T>(), size_of::<ListNode>())` so that free slots
-can always hold a list pointer regardless of `T`.
-
-`SlabCache<T>` owns slabs as `Box<Slab<T>>` and routes each slab between the three lists
-as its occupancy changes. Deallocation walks the lists to find the owning slab via a
-`contains()` check, frees the slot, then re-routes the slab based on its new state.
-
-Unlike the other allocators, `SlabCache` is not a `#[global_allocator]` — it is a
-purpose-built object cache intended to sit above a page allocator such as the buddy
-allocator.
 
 ## Next Steps
 - Heap growth via `mmap` overprovisioning
