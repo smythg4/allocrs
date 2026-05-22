@@ -1,5 +1,5 @@
 # allocrs
-Building custom memory allocators in Rust, following Phil Opp's [_Writing an OS in
+Building custom memory allocators in Rust, following Philipp Oppermann's [_Writing an OS in
 Rust_](https://os.phil-opp.com/allocator-designs/) blog — but adapted for macOS userspace
 instead of bare metal x86_64.
 
@@ -72,24 +72,26 @@ Locked<LinkedListAllocator>
 Locked<FixedSizeBlockAllocator>
   └── fallback: LinkedListAllocator (unguarded, protected by outer lock)
 Locked<BuddyAllocator<MIN_BLOCK_SIZE, ORDERS>>
+SlabCache<T>
+  ├── partial: linked list of slabs
+  ├── full:    linked list of slabs
+  └── empty:   linked list of slabs
 ```
 Each allocator is backed by an anonymous `mmap` region acquired lazily on first allocation.
 
-## Deviations from Opp
+## Deviations from Oppermann
 
 **macOS userspace instead of bare metal x86_64**
-Opp's allocators are initialized by `init_heap`, which manually maps virtual addresses to
-physical frames through page tables. On macOS in userspace the kernel handles that — the
-equivalent is `mmap`, which requests a committed virtual address range directly from the OS.
+Oppermann's allocators are initialized by `init_heap`, which manually maps virtual addresses to
+physical frames through page tables. On macOS in userspace the kernel handles it with `mmap`,
+which requests a committed virtual address range directly from the OS.
 
 **Lazy `mmap` initialization**
-Opp calls `init_heap` explicitly at a known point during kernel boot. In userspace, Rust's
-runtime makes allocations before `main` runs, so explicit initialization is too late. Each
-allocator self-initializes on its first allocation call by checking an uninitialized sentinel
-and calling `mmap` if needed.
+Each allocator self-initializes on its first allocation call by checking an uninitialized
+sentinel and calling `mmap` if needed.
 
 **Generic `Locked<A>` wrapper**
-Opp implements a bespoke `Locked<A>` using the `spin` crate. This project implements the
+Oppermann implements `Locked<A>` using the `spin` crate. This project implements the
 spinlock directly using `AtomicBool` and `UnsafeCell`, with a RAII `LockGuard<A>` that
 releases the lock on drop. The wrapper is fully generic and reused across all allocators.
 
@@ -100,10 +102,32 @@ coexist as distinct types with no runtime overhead, and makes misconfiguration v
 at the call site.
 
 **Linked list allocator with coalescing**
-Opp's linked list allocator does not coalesce adjacent free regions. This implementation
+Oppermann's linked list allocator does not coalesce adjacent free regions. This implementation
 keeps the free list sorted by address and merges adjacent blocks on every deallocation, reducing
 fragmentation.
 
+### Slab Allocator
+Manages memory as a collection of fixed-size object caches. Each cache maintains three
+linked lists of slabs — **partial** (some slots used), **full** (all slots used), and
+**empty** (no slots used) — enabling O(1) allocation and efficient identification of pages
+that can be returned to the OS.
+
+`Slab::next` is an intrusive linked list pointer owned and managed entirely by `SlabCache`.
+Slabs carry their own list linkage rather than requiring a separate container, following
+the same pattern used for free lists throughout this project.
+
+A `Slab` is backed by a single mmap'd page divided into fixed-size slots. Free slots form
+an embedded linked list (the same in-place `ListNode` trick used throughout this project).
+The minimum slot size is `max(size_of::<T>(), size_of::<ListNode>())` so that free slots
+can always hold a list pointer regardless of `T`.
+
+`SlabCache<T>` owns slabs as `Box<Slab<T>>` and routes each slab between the three lists
+as its occupancy changes. Deallocation walks the lists to find the owning slab via a
+`contains()` check, frees the slot, then re-routes the slab based on its new state.
+
+Unlike the other allocators, `SlabCache` is not a `#[global_allocator]` — it is a
+purpose-built object cache intended to sit above a page allocator such as the buddy
+allocator.
+
 ## Next Steps
-- Slab Allocator (backed by buddy for page-granule regions)
 - Heap growth via `mmap` overprovisioning

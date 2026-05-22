@@ -1,6 +1,6 @@
+use allocrs::HEAP_SIZE;
 use allocrs::buddy::BuddyAllocator;
 use allocrs::locked::Locked;
-use allocrs::HEAP_SIZE;
 
 /// Set the global allocator.
 #[global_allocator]
