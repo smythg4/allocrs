@@ -29,6 +29,12 @@ pub struct LinkedListAllocator {
     initialized: bool,
 }
 
+impl Default for LinkedListAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinkedListAllocator {
     /// Creates an empty LinkedListAllocator
     pub const fn new() -> Self {
@@ -38,7 +44,7 @@ impl LinkedListAllocator {
         }
     }
 
-    /// Initializes the bump allocator with the given heap bounds.
+    /// Initializes the linked list allocator with the pre-defined heap size.
     /// # Safety
     ///
     /// The caller must ensure this is called only once.
@@ -111,7 +117,7 @@ impl LinkedListAllocator {
         let mut current = &mut self.head;
         // look for a large enough memory region in the linked list
         while let Some(ref mut region) = current.next {
-            if let Ok(alloc_start) = Self::alloc_from_region(&region, size, align) {
+            if let Ok(alloc_start) = Self::alloc_from_region(region, size, align) {
                 // region suitable for allocation -> remove node from list
                 let next = region.next.take();
                 let ret = Some((current.next.take().unwrap(), alloc_start));

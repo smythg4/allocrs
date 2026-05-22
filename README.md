@@ -34,6 +34,24 @@ allocator.
 The tradeoff versus the linked list allocator is speed for memory efficiency — rounding up to
 fixed sizes introduces internal fragmentation, but eliminates free list searching entirely.
 
+### Buddy Allocator
+Manages memory as a binary tree of power-of-two-sized blocks. The heap is divided into two
+equal top-level regions; each can be recursively split in half down to a configurable minimum
+block size. On allocation, the request is rounded up to the nearest power of two and the
+smallest fitting free block is returned, splitting larger blocks as needed. On deallocation,
+a freed block is merged with its **buddy** — the adjacent same-sized block it was split from
+— and the merge recurses up the tree until the buddy is occupied or the top level is reached.
+
+The buddy address is computed with an XOR relative to the heap base:
+```
+buddy = heap_start + ((addr - heap_start) ^ block_size)
+```
+
+`MIN_BLOCK_SIZE` controls the granularity of the allocator and must be chosen relative to
+`HEAP_SIZE`: `ORDERS = log2(HEAP_SIZE / MIN_BLOCK_SIZE)`. A page-sized minimum (4 KB) is
+appropriate when the buddy allocator serves as a page allocator underneath a slab layer;
+a cache-line-sized minimum (64 bytes) is appropriate when used directly as a global allocator.
+
 ## Architecture
 
 `Locked<A>` is a generic spinlock wrapper that provides thread safety for any allocator `A`
@@ -45,6 +63,7 @@ Locked<BumpAllocator>
 Locked<LinkedListAllocator>
 Locked<FixedSizeBlockAllocator>
   └── fallback: LinkedListAllocator (unguarded, protected by outer lock)
+Locked<BuddyAllocator>
 ```
 Each allocator is backed by an anonymous `mmap` region acquired lazily on first allocation.
 
@@ -72,6 +91,5 @@ keeps the free list sorted by address and merges adjacent blocks on every deallo
 fragmentation.
 
 ## Next Steps
-- Slab Allocator
-- Buddy Allocator
+- Slab Allocator (backed by buddy for page-granule regions)
 - Heap growth via `mmap` overprovisioning

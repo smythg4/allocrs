@@ -19,6 +19,12 @@ pub struct FixedSizeBlockAllocator {
     fallback_allocator: LinkedListAllocator,
 }
 
+impl Default for FixedSizeBlockAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FixedSizeBlockAllocator {
     pub const fn new() -> Self {
         const EMPTY: Option<&'static mut ListNode> = None;
@@ -29,10 +35,10 @@ impl FixedSizeBlockAllocator {
     }
 
     /// Initialize the allocator with the given heap bounds.
+    /// # Safety
     ///
-    /// This function is unsafe because the caller must guarantee that the given
-    /// heap bounds are valid and that the heap is unused. This method must be
-    /// called only once.
+    /// The caller must ensure this is called only once.
+    /// The mmap'd region must be unused.
     pub unsafe fn init(&mut self) {
         unsafe {
             self.fallback_allocator.init();
